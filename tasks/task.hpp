@@ -4,6 +4,8 @@
 #include <variant>
 #include <coroutine>
 #include <type_traits>
+#include <chrono>
+#include <functional>
 
 namespace jmvm::tasks
 {
@@ -74,7 +76,7 @@ namespace jmvm::tasks
         struct promise_type : std::conditional_t<std::is_same_v<T, void>, void_promise_type, type_promise_type<T>> {
             auto get_return_object()
             {
-                return task{ coro::from_promise(*this) };
+                return task{ coro::from_promise(*this), *this };
             }
 
             std::suspend_always initial_suspend() const noexcept
@@ -86,16 +88,35 @@ namespace jmvm::tasks
             {
                 return {};
             }
+
+            task<T>* task_ptr_{ nullptr };
         };
 
         /// <summary>
-        /// Keeps resuming coroutine handle until finish
+        /// Runs coroutine once and returns true if it is done
         /// </summary>
-        void resume()
+        bool resume()
         {
-            while (!handle_.done())
+            if (inner_task_ != nullptr)
+            {
+                if (inner_task_())
+                {
+                    inner_task_ = nullptr;
+                    return handle_.done();
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else if (!handle_.done())
             {
                 handle_.resume();
+                return handle_.done();
+            }
+            else
+            {
+                return true;
             }
         }
 
@@ -106,7 +127,10 @@ namespace jmvm::tasks
 
         void await_suspend(auto h)
         {
-            resume();
+            h.promise().task_ptr_->inner_task_ = [t = handle_.promise().task_ptr_]()
+            {
+                return t->resume();
+            };
         }
 
         /// <summary>
@@ -124,6 +148,11 @@ namespace jmvm::tasks
             }
         }
 
+        task(coro&& handle, promise_type& promise): handle_{ std::move( handle ) }
+        {
+            promise.task_ptr_ = this;
+        }
+
         ~task()
         {
             if (handle_)
@@ -132,5 +161,16 @@ namespace jmvm::tasks
             }
         }
         coro handle_;
+        std::function<bool()> inner_task_{ nullptr };
+
+        static task<> delay(const std::chrono::milliseconds& time)
+        {
+            auto end_time = time + std::chrono::system_clock::now();
+            co_await std::suspend_always{};
+            while (end_time > std::chrono::system_clock::now())
+            {
+                co_await std::suspend_always{};
+            }
+        }
     };
 }
