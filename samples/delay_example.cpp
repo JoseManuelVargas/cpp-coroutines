@@ -1,5 +1,5 @@
 #include <task/task.hpp>
-#include <iostream>
+#include #include <thread>
 
 using namespace jmvm::tasks;
 
@@ -7,7 +7,7 @@ task<> loop1()
 {
 	for (int i = 0; i < 10; i++)
 	{
-		std::cout << ">>Loop 1: " << i << "\n";
+		std::cout << ">>Loop 1: " << i << " current thread id " << std::this_thread::get_id() << "\n";
 		co_await task<>::delay(std::chrono::milliseconds(1500));
 	}
 }
@@ -16,7 +16,7 @@ task<> loop2()
 {
 	for (int i = 0; i < 10; i++)
 	{
-		std::cout << "--Loop 2: " << i << "\n";
+		std::cout << "--Loop 2: " << i << " current thread id " << std::this_thread::get_id() << "\n";
 		co_await task<>::delay(std::chrono::milliseconds(2000));
 	}
 }
@@ -25,7 +25,7 @@ task<> loop3()
 {
 	for (int i = 0; i < 10; i++)
 	{
-		std::cout << "==Loop 3: " << i << "\n";
+		std::cout << "==Loop 3: " << i << " current thread id " << std::this_thread::get_id() << "\n";
 		co_await task<>::delay(std::chrono::milliseconds(2500));
 	}
 }
