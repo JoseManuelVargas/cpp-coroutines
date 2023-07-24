@@ -1,9 +1,17 @@
 #include <tasks/task.hpp>
+#include <iostream>
 
 using namespace jmvm::tasks;
 
+task<> fun8()
+{
+    std::cout << "          double inner void job" << std::endl;
+    co_await std::suspend_always{};
+}
+
 task<> fun7()
 {
+    co_await fun8();
     std::cout << "    inner not wait void job with exception" << std::endl;
     throw std::exception("Dummy void exception");
 }
@@ -61,6 +69,7 @@ task<> fun1()
 task<> fun2()
 {
     std::cout << "    inner second job" << std::endl;
+    co_await fun8();
     co_await std::suspend_always{};
 }
 
@@ -89,13 +98,16 @@ int main()
         co_await fun();
         std::cout << "After awaiting" << std::endl;
     }();
-    f.resume();
+    
+    while (!f.resume());
 
     auto f2 = []() -> task<int>
     {
         int y = co_await fun5();
         std::cout << "After awaiting: y = " << y << std::endl;
     }();
-    f2.resume();
+    
+    while (!f2.resume());
     std::cout << "Finish" << std::endl;
+    return 0;
 }
