@@ -4,6 +4,7 @@
 #include <coroutine>
 #include <type_traits>
 #include <chrono>
+#include <stop_token>
 #include <functional>
 
 namespace jmvm::tasks
@@ -147,10 +148,31 @@ namespace jmvm::tasks
             }
         }
 
-        task(coro&& handle, promise_type& promise): handle_{ std::move( handle ) }
+        task(coro&& handle, promise_type& promise): 
+            handle_{ std::move( handle ) }, 
+            promise_ptr_{ &promise }
         {
-            promise.task_ptr_ = this;
+            promise_ptr_->task_ptr_ = this;
         }
+
+        task(task&& t) noexcept: 
+            inner_task_{ std::move(t.inner_task_) }
+        {
+            std::swap(handle_, t.handle_);
+            std::swap(promise_ptr_, t.promise_ptr_);
+            promise_ptr_->task_ptr_ = this;
+        }
+
+        task& operator=(task&& t)
+        {
+            std::swap(handle_, t.handle_);
+            std::swap(promise_ptr_, t.promise_ptr_);
+            inner_task_ = std::move(t.inner_task_);
+            promise_ptr_->task_ptr_ = this;
+        }
+
+        task(const task&) = delete;
+        task& operator=(const task&) = delete;
 
         ~task()
         {
@@ -161,12 +183,12 @@ namespace jmvm::tasks
         }
         coro handle_;
         std::function<bool()> inner_task_{ nullptr };
+        promise_type* promise_ptr_;
 
-        static task<> delay(const std::chrono::milliseconds& time)
+        static task<> delay(const std::chrono::milliseconds& time, std::stop_token token = {})
         {
             auto end_time = time + std::chrono::system_clock::now();
-            co_await std::suspend_always{};
-            while (end_time > std::chrono::system_clock::now())
+            while (!token.stop_requested() && end_time > std::chrono::system_clock::now())
             {
                 co_await std::suspend_always{};
             }
